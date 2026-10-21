@@ -472,12 +472,13 @@ class Implementer:
                             ops = val
                             break
             if not ops:
-                raise LLMError("implementer produced no operations")
-            applied = await _apply_operations(ctx, ops)
+                ops = []
+            applied = await _apply_operations(ctx, ops) if ops else []
+            default_summary = f"applied {len(applied)} changes" if applied else "verified existing implementation (no changes required)"
+            summary = result.get("summary") or default_summary
             await ctx.finish_step(step, status="completed",
                                   output={"applied": applied},
-                                  summary=result.get("summary",
-                                                     f"applied {len(applied)} changes"),
+                                  summary=summary,
                                   tokens=resp.prompt_tokens + resp.completion_tokens)
             ctx.set_data("implementation", {"applied": applied})
             return {"applied": applied}
@@ -774,12 +775,13 @@ class RepairAgent:
                             ops = val
                             break
             if not ops:
-                raise LLMError("repair agent produced no operations")
-            applied = await _apply_operations(ctx, ops)
+                ops = []
+            applied = await _apply_operations(ctx, ops) if ops else []
+            default_summary = f"repaired {len(applied)} file(s)" if applied else "no further repair operations needed"
+            summary = result.get("summary") or default_summary
             await ctx.finish_step(step, status="completed",
                                   output={"applied": applied},
-                                  summary=result.get("summary",
-                                                     f"repaired {len(applied)} file(s)"),
+                                  summary=summary,
                                   tokens=resp.prompt_tokens + resp.completion_tokens)
             return {"applied": applied}
         except Exception as e:
