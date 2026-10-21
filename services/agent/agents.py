@@ -120,29 +120,80 @@ def _normalize_target(t: Any) -> dict[str, str]:
 
 
 def _parse_json_response(content: str) -> dict:
-    """Parse the LLM's JSON output; tolerate code fences and conversational preamble."""
+    """Parse the LLM's JSON output; tolerate code fences, unescaped newlines, and truncated responses."""
     text = content.strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
+
+    # 1. Direct json.loads with strict=False (allows unescaped newlines/tabs in code)
     try:
-        data = json.loads(text)
+        data = json.loads(text, strict=False)
         if isinstance(data, dict):
             return data
-        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-            return data[0]
-        return {"data": data}
-    except json.JSONDecodeError:
-        # Fallback: search for first { and last }
-        m = re.search(r"(\{.*\})", text, re.DOTALL)
-        if m:
+        if isinstance(data, list):
+            if data and isinstance(data[0], dict):
+                return data[0]
+            return {"items": data}
+    except Exception:
+        pass
+
+    # 2. Extract outermost { ... }
+    m = re.search(r"(\{.*\})", text, re.DOTALL)
+    if m:
+        try:
+            data = json.loads(m.group(1), strict=False)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+
+    # 3. Extract outermost [ ... ]
+    m2 = re.search(r"(\[.*\])", text, re.DOTALL)
+    if m2:
+        try:
+            data = json.loads(m2.group(1), strict=False)
+            if isinstance(data, list):
+                if data and isinstance(data[0], dict):
+                    return data[0]
+                return {"items": data}
+        except Exception:
+            pass
+
+    # 4. Truncation repair: auto-close open strings and braces
+    repaired = text.strip()
+    repaired = re.sub(r"```.*$", "", repaired).strip()
+    if repaired.count('"') % 2 != 0:
+        repaired += '"'
+    opens_brace = repaired.count('{') - repaired.count('}')
+    opens_bracket = repaired.count('[') - repaired.count(']')
+    repaired += (']' * max(0, opens_bracket)) + ('}' * max(0, opens_brace))
+    try:
+        data = json.loads(repaired, strict=False)
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list):
+            if data and isinstance(data[0], dict):
+                return data[0]
+            return {"items": data}
+    except Exception:
+        pass
+
+    # 5. Regex-based extraction of "operations" if JSON was cut off inside operations
+    if '"operations"' in text or '"changes"' in text:
+        ops = []
+        op_blocks = re.findall(r'\{\s*"[^"]+"\s*:\s*"[^"]+".*?\}', text, re.DOTALL)
+        for ob in op_blocks:
             try:
-                data = json.loads(m.group(1))
-                if isinstance(data, dict):
-                    return data
-            except json.JSONDecodeError:
+                op_data = json.loads(ob, strict=False)
+                if isinstance(op_data, dict) and ("path" in op_data or "file" in op_data or "content" in op_data):
+                    ops.append(op_data)
+            except Exception:
                 pass
-        raise LLMError(f"LLM returned malformed JSON: head={content[:200]!r}")
+        if ops:
+            return {"operations": ops, "summary": f"extracted {len(ops)} operations"}
+
+    raise LLMError(f"LLM returned malformed JSON: head={content[:200]!r}")
 
 
 # ---------------------------------------------------------------------------
