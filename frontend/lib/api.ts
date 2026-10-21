@@ -21,10 +21,10 @@ const ACCESS_KEY = "nexusforge.access_token";
 const REFRESH_KEY = "nexusforge.refresh_token";
 
 export function apiBase(): string {
-  if (process.env.NEXT_PUBLIC_API_BASE !== undefined) {
+  if (process.env.NEXT_PUBLIC_API_BASE) {
     return process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "");
   }
-  return "";
+  return "https://html-safely-clothing-facility.trycloudflare.com";
 }
 
 export class ApiError extends Error {

@@ -2,7 +2,7 @@
 const backendUrl =
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_API_BASE ||
-  'https://bumpy-pumas-hammer.loca.lt';
+  'https://html-safely-clothing-facility.trycloudflare.com';
 
 const nextConfig = {
   reactStrictMode: true,
