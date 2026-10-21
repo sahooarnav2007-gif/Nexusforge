@@ -41,7 +41,16 @@ async def import_repository(
     if source_kind == "local":
         if not source_ref:
             raise ValidationError("source_ref (local path) is required for kind 'local'")
-        src = Path(source_ref).expanduser().resolve()
+        src = Path(source_ref).expanduser()
+        if not src.exists():
+            from core.config import ROOT_DIR
+            if (ROOT_DIR / src).exists():
+                src = (ROOT_DIR / src).resolve()
+            else:
+                src = src.resolve()
+        else:
+            src = src.resolve()
+
         if not src.exists():
             raise ValidationError(f"Source path does not exist: {src}")
         if not src.is_dir():

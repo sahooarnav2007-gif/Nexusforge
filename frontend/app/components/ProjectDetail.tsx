@@ -355,7 +355,19 @@ function ImportRepoForm({
 
   return (
     <form onSubmit={submit} className="card space-y-3 p-4">
-      <h3 className="text-sm font-bold text-ink">Import repository</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-ink">Import repository</h3>
+        <button
+          type="button"
+          className="text-xs font-medium text-brand-600 hover:text-brand-700 hover:underline"
+          onClick={() => {
+            setName("demo-service");
+            setSourceRef("demo/repo");
+          }}
+        >
+          ✨ Load Built-in Demo Repo
+        </button>
+      </div>
       <ErrorNote message={error} onDismiss={() => setError("")} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
@@ -367,21 +379,21 @@ function ImportRepoForm({
             required
             maxLength={200}
             className="input"
-            placeholder="my-repo"
+            placeholder="demo-service"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </div>
         <div>
           <label className="label" htmlFor="r-ref">
-            Local path
+            Local path on server
           </label>
           <input
             id="r-ref"
             required
             maxLength={500}
             className="input font-mono text-xs"
-            placeholder="/opt/sandbox/workspace/extracted/nexusforge"
+            placeholder="demo/repo"
             value={sourceRef}
             onChange={(e) => setSourceRef(e.target.value)}
           />
