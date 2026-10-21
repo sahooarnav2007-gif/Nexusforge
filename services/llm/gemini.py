@@ -66,15 +66,32 @@ class GeminiProvider(LLMProvider):
         prompt_tokens = sum(estimate_tokens(m.content) for m in messages)
         import time
 
-        t0 = time.monotonic()
-        url = f"/models/{self.model}:generateContent"
-        try:
-            resp = await client.post(url, params={"key": self.api_key}, json=body)
-        except httpx.HTTPError as e:
-            raise LLMError(f"Gemini request failed: {type(e).__name__}") from e
+        models_to_try = [self.model]
+        for fallback in ("gemini-3.5-flash", "gemini-3.6-flash", "gemini-3-flash-preview"):
+            if fallback not in models_to_try:
+                models_to_try.append(fallback)
+
+        resp = None
+        used_model = self.model
+        for candidate_model in models_to_try:
+            url = f"/models/{candidate_model}:generateContent"
+            try:
+                resp = await client.post(url, params={"key": self.api_key}, json=body)
+                if resp.status_code == 200:
+                    used_model = candidate_model
+                    break
+                elif resp.status_code in (429, 503):
+                    continue
+                else:
+                    break
+            except httpx.HTTPError:
+                continue
+
         latency = int((time.monotonic() - t0) * 1000)
-        if resp.status_code != 200:
-            raise LLMError(f"Gemini API error {resp.status_code}: {resp.text[:300]}")
+        if resp is None or resp.status_code != 200:
+            err_msg = resp.text[:300] if resp else "no response"
+            status = resp.status_code if resp else 500
+            raise LLMError(f"Gemini API error {status}: {err_msg}")
         data = resp.json()
         try:
             cand = data["candidates"][0]
