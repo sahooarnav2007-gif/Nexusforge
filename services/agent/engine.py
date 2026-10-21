@@ -118,11 +118,9 @@ async def execute_run(run_id: str) -> None:
         ctx._seq = int(max_evt)
         ctx._step_seq = int(max_step)
 
-        started = False
         try:
             if run.state == TaskState.QUEUED.value:
                 run.started_at = _now()
-                started = True
             await _run_pipeline(ctx)
         except asyncio.CancelledError:
             await _recover_session(db, run, task)

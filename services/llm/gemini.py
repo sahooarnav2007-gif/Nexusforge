@@ -83,7 +83,7 @@ class GeminiProvider(LLMProvider):
 
         resp = None
         used_model = self.model
-        for attempt in range(2):
+        for _attempt in range(2):
             for candidate_model in models_to_try:
                 url = f"/models/{candidate_model}:generateContent"
                 try:

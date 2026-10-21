@@ -34,3 +34,4 @@ frontend/*.tsbuildinfo
 .DS_Store
 .idea/
 .vscode/
+.vercel
