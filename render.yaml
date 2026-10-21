@@ -1,7 +1,7 @@
 services:
   - type: web
     name: nexusforge-api
-    env: docker
+    runtime: docker
     dockerfilePath: Dockerfile
     plan: free
     healthCheckPath: /health
