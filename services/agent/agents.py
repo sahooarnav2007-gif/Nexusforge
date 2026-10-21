@@ -70,16 +70,59 @@ async def _apply_operations(ctx: AgentContext, operations: list[dict]) -> list[d
     return applied
 
 
+def _normalize_target(t: Any) -> dict[str, str]:
+    """Normalize any target representation (string, dict, object) into a standard dict."""
+    if isinstance(t, dict):
+        path = str(t.get("path") or t.get("file") or t.get("name") or "")
+        desc = str(t.get("description") or t.get("desc") or t.get("summary") or path or "")
+        kind = str(t.get("kind") or "target")
+        name = str(t.get("name") or path)
+        return {
+            "kind": kind,
+            "name": name,
+            "path": path,
+            "description": desc,
+        }
+    if isinstance(t, str):
+        return {
+            "kind": "target",
+            "name": t,
+            "path": t if ("." in t or "/" in t or "\\" in t) else "",
+            "description": t,
+        }
+    s = str(t)
+    return {
+        "kind": "target",
+        "name": s,
+        "path": "",
+        "description": s,
+    }
+
+
 def _parse_json_response(content: str) -> dict:
-    """Parse the LLM's JSON output; tolerate code fences."""
+    """Parse the LLM's JSON output; tolerate code fences and conversational preamble."""
     text = content.strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
     try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        raise LLMError(f"LLM returned malformed JSON: {e}; head={content[:200]!r}") from e
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+            return data[0]
+        return {"data": data}
+    except json.JSONDecodeError:
+        # Fallback: search for first { and last }
+        m = re.search(r"(\{.*\})", text, re.DOTALL)
+        if m:
+            try:
+                data = json.loads(m.group(1))
+                if isinstance(data, dict):
+                    return data
+            except json.JSONDecodeError:
+                pass
+        raise LLMError(f"LLM returned malformed JSON: head={content[:200]!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -119,8 +162,13 @@ class RequirementAnalyzer:
                          "files": files},
             )
             spec = _parse_json_response(resp.content)
-            if "targets" not in spec or not spec["targets"]:
-                raise LLMError("requirement analysis produced no targets")
+            raw_targets = spec.get("targets", [])
+            if isinstance(raw_targets, str):
+                raw_targets = [raw_targets]
+            spec["targets"] = [_normalize_target(t) for t in raw_targets]
+            if not spec["targets"]:
+                default_desc = spec.get("goal") or ctx.task.requirement
+                spec["targets"] = [_normalize_target(default_desc)]
             await ctx.finish_step(step, status="completed", output=spec,
                                   summary=spec.get("notes", "spec produced"),
                                   tokens=resp.prompt_tokens + resp.completion_tokens)
@@ -201,8 +249,10 @@ class Planner:
         try:
             await ctx.set_state(self.state)
             spec = ctx.get_data("spec", {})
+            targets = [_normalize_target(t) for t in spec.get("targets", [])]
+            target_str = " ".join(t.get("description", "") for t in targets)
             chunks = await ctx.retrieve(
-                " ".join(t.get("description", "") for t in spec.get("targets", [])),
+                target_str or spec.get("goal", ctx.task.requirement),
                 max_chunks=8,
             )
             files = await ctx.file_contents(sorted({c.path for c in chunks}))
@@ -254,11 +304,15 @@ class Implementer:
             for st in plan.get("steps", []):
                 wanted.update(st.get("files", []))
             for t in spec.get("targets", []):
-                if t.get("path"):
-                    wanted.add(t["path"])
+                t_path = _normalize_target(t).get("path")
+                if t_path:
+                    wanted.add(t_path)
+            first_desc = ""
+            targets = spec.get("targets", [])
+            if targets:
+                first_desc = _normalize_target(targets[0]).get("description", "")
             chunks = await ctx.retrieve(
-                " ".join(spec.get("targets", [{}])[0].get("description", "")) or
-                spec.get("goal", ""),
+                first_desc or spec.get("goal", ctx.task.requirement),
                 max_chunks=10,
             )
             paths = sorted(wanted | {c.path for c in chunks})
@@ -316,8 +370,9 @@ class TestGenerator:
             # context: existing tests (conventions) + implemented targets
             paths = list(test_files[:3])
             for t in spec.get("targets", []):
-                if t.get("path"):
-                    paths.append(t["path"])
+                t_path = _normalize_target(t).get("path")
+                if t_path:
+                    paths.append(t_path)
             chunks = await ctx.retrieve(spec.get("goal", ""), max_chunks=6)
             paths += [c.path for c in chunks if c.path not in paths]
             files = await ctx.file_contents(sorted(set(paths)))
@@ -465,9 +520,11 @@ class FailureAnalyzer:
                 paths.add(m2.group(1))
             files = await ctx.file_contents(sorted(paths))
             if not files:
-                files = await ctx.file_contents(
-                    [t.get("path", "") for t in ctx.get_data("spec", {}).get(
-                        "targets", []) if t.get("path")])
+                target_paths = [
+                    _normalize_target(t).get("path", "")
+                    for t in ctx.get_data("spec", {}).get("targets", [])
+                ]
+                files = await ctx.file_contents([p for p in target_paths if p])
             resp = await ctx.llm_complete(
                 role="failure_analyzer",
                 system=(
@@ -522,8 +579,9 @@ class RepairAgent:
                 if resolved_frame:
                     paths.add(resolved_frame)
             for t in ctx.get_data("spec", {}).get("targets", []):
-                if t.get("path"):
-                    paths.add(t["path"])
+                t_path = _normalize_target(t).get("path")
+                if t_path:
+                    paths.add(t_path)
             # when the failure is in a *test*, the real bug is usually in the
             # route handler the test exercises — include the route files
             if resolved_frame and (

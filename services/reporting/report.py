@@ -71,7 +71,13 @@ async def build_markdown_report(ctx) -> str:
         A("### Parsed targets")
         A("")
         for t in spec.get("targets", []):
-            A(f"- `{t.get('kind')}`: {t.get('description') or t.get('name') or t.get('path')}")
+            if isinstance(t, dict):
+                kind = t.get("kind", "target")
+                desc = t.get("description") or t.get("name") or t.get("path") or ""
+            else:
+                kind = "target"
+                desc = str(t)
+            A(f"- `{kind}`: {desc}")
         A("")
         A("### Acceptance criteria")
         A("")
