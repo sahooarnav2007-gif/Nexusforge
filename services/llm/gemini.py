@@ -74,19 +74,24 @@ class GeminiProvider(LLMProvider):
 
         resp = None
         used_model = self.model
-        for candidate_model in models_to_try:
-            url = f"/models/{candidate_model}:generateContent"
-            try:
-                resp = await client.post(url, params={"key": self.api_key}, json=body)
-                if resp.status_code == 200:
-                    used_model = candidate_model
-                    break
-                elif resp.status_code in (429, 503):
+        for attempt in range(2):
+            for candidate_model in models_to_try:
+                url = f"/models/{candidate_model}:generateContent"
+                try:
+                    resp = await client.post(url, params={"key": self.api_key}, json=body)
+                    if resp.status_code == 200:
+                        used_model = candidate_model
+                        break
+                    elif resp.status_code in (429, 503):
+                        await asyncio.sleep(2.0)
+                        continue
+                    else:
+                        break
+                except httpx.HTTPError:
+                    await asyncio.sleep(1.5)
                     continue
-                else:
-                    break
-            except httpx.HTTPError:
-                continue
+            if resp is not None and resp.status_code == 200:
+                break
 
         latency = int((time.monotonic() - t0) * 1000)
         if resp is None or resp.status_code != 200:
