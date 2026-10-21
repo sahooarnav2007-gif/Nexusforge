@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: nexusforge-api
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NEXUSFORGE_ENVIRONMENT
+        value: production
+      - key: NEXUSFORGE_DEBUG
+        value: "false"
+      - key: NEXUSFORGE_JWT_SECRET
+        generateValue: true
+      - key: NEXUSFORGE_WEB_ORIGIN
+        value: "*"
+      - key: NEXUSFORGE_LLM_PROVIDER
+        value: gemini
+      - key: NEXUSFORGE_LLM_MODEL
+        value: gemini-3.7-flash
+      - key: NEXUSFORGE_GEMINI_API_KEY
+        sync: false
+      - key: NEXUSFORGE_SANDBOX_BACKEND
+        value: process
+      - key: NEXUSFORGE_DATABASE_URL
+        value: sqlite+aiosqlite:////app/var/nexusforge.db

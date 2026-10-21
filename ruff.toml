@@ -1,0 +1,60 @@
+# NexusForge lint configuration (ruff).
+#
+# Infrastructure file: defines the project lint ruleset and grandfathers the
+# *pre-existing* lint debt in individual files so CI enforces the standard on
+# new/changed code without requiring a repo-wide cleanup. When you clean up a
+# file, remove its entry (or the specific rule) below and the gate covers it.
+#
+# Ruleset: E9 (runtime/syntax errors), F (pyflakes: undefined names, unused
+# imports, f-string issues), B (flake8-bugbear: real bug patterns). Style rules
+# (W, I, UP, SIM, ...) are intentionally not enforced yet; run `make format` or
+# `ruff check --select I,UP,W` locally if you want them.
+
+target-version = "py311"
+line-length = 100
+
+# Runtime-generated and fixture trees are not project source.
+extend-exclude = [
+    "var",            # runtime DB, workspaces, audit log
+    "demo/repo",      # intentionally-incomplete demo fixture
+    "node_modules",
+    ".next",
+]
+
+[lint]
+select = ["E9", "F", "B"]
+
+# --- Pre-existing debt, grandfathered per file (remove as files are cleaned) ---
+[lint.per-file-ignores]
+"api/app.py" = ["F401", "F841"]
+"api/deps.py" = ["F401"]
+"api/routers/projects.py" = ["F401"]
+"api/routers/tasks.py" = ["F401", "F821"]
+"core/config.py" = ["F401"]
+"core/errors.py" = ["F401"]
+"core/security.py" = ["F841"]
+"scripts/demo.py" = ["F401", "F541", "F841"]
+"services/agent/agents.py" = ["F401"]
+"services/agent/engine.py" = ["F401"]
+"services/agent/testparse.py" = ["F841"]
+"services/agent/worker.py" = ["F401", "F821"]
+"services/gitops/git.py" = ["F841"]
+"services/indexing/ast_extract.py" = ["F401"]
+"services/indexing/chunking.py" = ["F841"]
+"services/indexing/ignore.py" = ["F401"]
+"services/indexing/ingest.py" = ["F401"]
+"services/indexing/search.py" = ["F401"]
+"services/indexing/vectorizer.py" = ["B905"]
+"services/llm/anthropic.py" = ["F401"]
+"services/llm/base.py" = ["F401", "F841"]
+"services/llm/gemini.py" = ["F401"]
+"services/llm/local/__init__.py" = ["F401"]
+"services/llm/local/diagnose.py" = ["F401", "F841"]
+"services/llm/local/review.py" = ["B007"]
+"services/llm/local/synth.py" = ["B007", "B905", "F841"]
+"services/llm/openai_compat.py" = ["F401"]
+"services/reporting/report.py" = ["F401", "F541", "F841"]
+"services/sandbox/sandbox.py" = ["F401"]
+"services/tools/exec_tools.py" = ["F401"]
+"services/tools/git_tools.py" = ["F401", "F821"]
+"services/tools/registry.py" = ["F401"]

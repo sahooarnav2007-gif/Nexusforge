@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-surface text-ink antialiased;
+}
+
+/* --- reusable component classes ------------------------------------------ */
+
+@layer components {
+  .input {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-ink
+      shadow-sm outline-none transition placeholder:text-ink-faint
+      focus:border-brand-500 focus:ring-2 focus:ring-brand-500/25 disabled:cursor-not-allowed
+      disabled:bg-surface-inset;
+  }
+
+  .label {
+    @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-muted;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+      transition focus:outline-none focus:ring-2 focus:ring-brand-500/40
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800;
+  }
+
+  .btn-secondary {
+    @apply btn border border-slate-300 bg-white text-ink-soft shadow-sm hover:bg-surface-inset;
+  }
+
+  .btn-danger {
+    @apply btn border border-red-200 bg-white text-red-600 shadow-sm hover:bg-red-50;
+  }
+
+  .card {
+    @apply rounded-xl border border-slate-200 bg-surface-raised shadow-card;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold;
+  }
+}
+
+/* --- terminal ------------------------------------------------------------- */
+
+.term {
+  @apply font-mono text-[12.5px] leading-[1.55];
+  background: #0b1120;
+  color: #d7e1f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.term::-webkit-scrollbar {
+  width: 10px;
+}
+.term::-webkit-scrollbar-thumb {
+  background: #24324d;
+  border-radius: 6px;
+}
+.term::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* --- markdown report ------------------------------------------------------ */
+
+.markdown-body {
+  @apply text-sm leading-relaxed text-ink-soft;
+}
+.markdown-body h1 {
+  @apply mb-3 mt-6 border-b border-slate-200 pb-2 text-xl font-bold text-ink first:mt-0;
+}
+.markdown-body h2 {
+  @apply mb-2 mt-6 text-lg font-bold text-ink first:mt-0;
+}
+.markdown-body h3 {
+  @apply mb-2 mt-4 text-base font-semibold text-ink;
+}
+.markdown-body p {
+  @apply my-2;
+}
+.markdown-body ul {
+  @apply my-2 list-disc pl-5;
+}
+.markdown-body ol {
+  @apply my-2 list-decimal pl-5;
+}
+.markdown-body li {
+  @apply my-0.5;
+}
+.markdown-body code {
+  @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-[12.5px] text-brand-800;
+}
+.markdown-body pre {
+  @apply my-3 overflow-x-auto rounded-lg bg-slate-900 p-3;
+}
+.markdown-body pre code {
+  @apply bg-transparent p-0 text-slate-100;
+}
+.markdown-body table {
+  @apply my-3 w-full border-collapse text-sm;
+}
+.markdown-body th {
+  @apply border-b border-slate-300 px-2 py-1 text-left font-semibold text-ink;
+}
+.markdown-body td {
+  @apply border-b border-slate-200 px-2 py-1;
+}
+.markdown-body blockquote {
+  @apply my-2 border-l-4 border-brand-200 pl-3 text-ink-muted;
+}
+.markdown-body a {
+  @apply text-brand-700 underline;
+}
+.markdown-body hr {
+  @apply my-4 border-slate-200;
+}

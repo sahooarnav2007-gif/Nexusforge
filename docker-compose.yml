@@ -1,0 +1,124 @@
+# NEXUSFORGE — one-command local deployment.
+#
+#   docker compose up --build
+#
+# The `api` service is the whole backend (the agent worker runs in-process in
+# the single uvicorn worker). `db` and `redis` are OPTIONAL:
+#
+#   * By default the API uses the built-in SQLite database (file in the `var/`
+#     volume) and the in-process job queue — zero extra services.
+#   * To use PostgreSQL, set on the api service (or in .env):
+#       NEXUSFORGE_DATABASE_URL=postgresql+asyncpg://nexusforge:nexusforge@db:5432/nexusforge
+#     and make sure the `db` service is started (it is, by default).
+#   * To use Redis for the job queue / event fan-out, set:
+#       NEXUSFORGE_REDIS_URL=redis://redis:6379/0
+#
+# Copy .env.example to .env and adjust values before first run. In production
+# you MUST set a strong NEXUSFORGE_JWT_SECRET (the app refuses to start in
+# production with the dev default).
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nexusforge-api:latest
+    container_name: nexusforge-api
+    ports:
+      - "8000:8000"
+    environment:
+      # Bind all interfaces inside the container so the published port works.
+      NEXUSFORGE_API_HOST: "0.0.0.0"
+      NEXUSFORGE_API_PORT: "8000"
+      NEXUSFORGE_ENVIRONMENT: "production"
+      NEXUSFORGE_DEBUG: "false"
+      # REQUIRED in production — set a long random value in .env.
+      NEXUSFORGE_JWT_SECRET: "${NEXUSFORGE_JWT_SECRET:-change-me}"
+      # Default: built-in SQLite in the var/ volume (absolute path inside the
+      # container: /app/var/nexusforge.db — note the four slashes).
+      # Switch to the bundled Postgres by uncommenting the line below:
+      # NEXUSFORGE_DATABASE_URL: "postgresql+asyncpg://nexusforge:nexusforge@db:5432/nexusforge"
+      NEXUSFORGE_DATABASE_URL: "${NEXUSFORGE_DATABASE_URL:-sqlite+aiosqlite:////app/var/nexusforge.db}"
+      # LLM provider: local (offline, deterministic) | openai | anthropic | gemini
+      NEXUSFORGE_LLM_PROVIDER: "${NEXUSFORGE_LLM_PROVIDER:-local}"
+      NEXUSFORGE_LLM_MODEL: "${NEXUSFORGE_LLM_MODEL:-}"
+      NEXUSFORGE_OPENAI_API_KEY: "${NEXUSFORGE_OPENAI_API_KEY:-}"
+      NEXUSFORGE_ANTHROPIC_API_KEY: "${NEXUSFORGE_ANTHROPIC_API_KEY:-}"
+      NEXUSFORGE_GEMINI_API_KEY: "${NEXUSFORGE_GEMINI_API_KEY:-}"
+      # Sandbox: auto | docker | process.
+      # NOTE: the `docker` backend needs the Docker CLI + /var/run/docker.sock
+      # mounted into this container (see README "Sandbox backends").
+      NEXUSFORGE_SANDBOX_BACKEND: "${NEXUSFORGE_SANDBOX_BACKEND:-process}"
+      NEXUSFORGE_SANDBOX_MEMORY_MB: "${NEXUSFORGE_SANDBOX_MEMORY_MB:-1024}"
+      NEXUSFORGE_SANDBOX_CPUS: "${NEXUSFORGE_SANDBOX_CPUS:-2}"
+      NEXUSFORGE_SANDBOX_TIMEOUT_SECONDS: "${NEXUSFORGE_SANDBOX_TIMEOUT_SECONDS:-120}"
+      NEXUSFORGE_SANDBOX_NETWORK: "${NEXUSFORGE_SANDBOX_NETWORK:-false}"
+      # Empty = in-process queue. Use redis://redis:6379/0 to enable Redis.
+      NEXUSFORGE_REDIS_URL: "${NEXUSFORGE_REDIS_URL:-}"
+      NEXUSFORGE_MAX_AGENT_ITERATIONS: "${NEXUSFORGE_MAX_AGENT_ITERATIONS:-5}"
+      NEXUSFORGE_MAX_EXECUTION_TIME_SECONDS: "${NEXUSFORGE_MAX_EXECUTION_TIME_SECONDS:-600}"
+      NEXUSFORGE_SECURITY_BLOCK_ON: "${NEXUSFORGE_SECURITY_BLOCK_ON:-critical}"
+      NEXUSFORGE_RATE_LIMIT_ENABLED: "${NEXUSFORGE_RATE_LIMIT_ENABLED:-true}"
+      NEXUSFORGE_WORKSPACE_ROOT: "/app/var/workspaces"
+      NEXUSFORGE_AUDIT_LOG_PATH: "/app/var/audit.jsonl"
+      NEXUSFORGE_GIT_PUSH_ENABLED: "${NEXUSFORGE_GIT_PUSH_ENABLED:-false}"
+    volumes:
+      # Durable runtime data: SQLite DB, agent workspaces, audit log.
+      - nexusforge-var:/app/var
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # Optional PostgreSQL 16. Only needed when NEXUSFORGE_DATABASE_URL points at
+  # it (see the comment on the api service).
+  db:
+    image: postgres:16-alpine
+    container_name: nexusforge-db
+    environment:
+      POSTGRES_USER: "nexusforge"
+      POSTGRES_PASSWORD: "nexusforge"
+      POSTGRES_DB: "nexusforge"
+    volumes:
+      - nexusforge-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexusforge -d nexusforge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    # Uncomment to reach Postgres from the host (psql, DBeaver, ...):
+    # ports:
+    #   - "5432:5432"
+
+  # Optional Redis 7. Only needed when NEXUSFORGE_REDIS_URL is set.
+  redis:
+    image: redis:7-alpine
+    container_name: nexusforge-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - nexusforge-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    # Uncomment to reach Redis from the host:
+    # ports:
+    #   - "6379:6379"
+
+volumes:
+  nexusforge-var:
+  nexusforge-pgdata:
+  nexusforge-redisdata:

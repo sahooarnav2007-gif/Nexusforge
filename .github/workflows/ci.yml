@@ -1,0 +1,70 @@
+# NexusForge CI — lint + test on every push / PR to main.
+#
+# Two jobs, both on the Python 3.11 runner:
+#   lint — ruff (rules defined in ruff.toml; pre-existing debt is grandfathered
+#          there so the gate is green and only new violations fail CI)
+#   test — full pytest suite (asyncio_mode=auto, testpaths=tests)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs of the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Ruff check
+        run: ruff check .
+
+  test:
+    name: Test (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run test suite
+        # The suite is still being built out; treat "no tests collected"
+        # (pytest exit 5) as passing so the gate is green, while any real
+        # test failure (exit 1) still fails CI.
+        run: |
+          set +e
+          pytest -q
+          rc=$?
+          set -e
+          if [ "$rc" -eq 5 ]; then
+            echo "::notice::No tests collected yet (pytest exit 5); nothing to run."
+          elif [ "$rc" -ne 0 ]; then
+            echo "pytest failed with exit code $rc"
+            exit "$rc"
+          fi

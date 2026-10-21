@@ -1,0 +1,39 @@
+# Runtime / generated data (never ship these into the image).
+var/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# VCS
+.git/
+.gitignore
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Node / frontend (built separately; see frontend/ note in README).
+node_modules/
+frontend/.next/
+frontend/node_modules/
+
+# Local environment / secrets — never bake into the image.
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
