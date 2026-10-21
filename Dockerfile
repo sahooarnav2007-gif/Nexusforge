@@ -14,7 +14,10 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HOST=0.0.0.0 \
+    PORT=8000 \
+    NEXUSFORGE_API_HOST=0.0.0.0
 
 # git is used by the gitops service; curl powers the container healthcheck.
 RUN apt-get update \

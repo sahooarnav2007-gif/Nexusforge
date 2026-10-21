@@ -10,6 +10,8 @@ services:
         value: production
       - key: NEXUSFORGE_DEBUG
         value: "false"
+      - key: NEXUSFORGE_API_HOST
+        value: "0.0.0.0"
       - key: NEXUSFORGE_JWT_SECRET
         generateValue: true
       - key: NEXUSFORGE_WEB_ORIGIN
@@ -17,7 +19,7 @@ services:
       - key: NEXUSFORGE_LLM_PROVIDER
         value: gemini
       - key: NEXUSFORGE_LLM_MODEL
-        value: gemini-3.7-flash
+        value: gemini-3-flash-preview
       - key: NEXUSFORGE_GEMINI_API_KEY
         sync: false
       - key: NEXUSFORGE_SANDBOX_BACKEND
