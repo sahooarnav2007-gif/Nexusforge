@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     debug: bool = True
     api_host: str = "127.0.0.1"
     api_port: int = 8000
-    web_origin: str = "http://localhost:3000"
+    web_origin: str = "*"
     base_url: str = "http://localhost:8000"
 
     # --- database ---
@@ -53,8 +53,8 @@ class Settings(BaseSettings):
     auth_rate_limit_window_seconds: int = 60
 
     # --- LLM ---
-    llm_provider: Literal["local", "openai", "anthropic", "gemini"] = "local"
-    llm_model: str = ""
+    llm_provider: Literal["local", "openai", "anthropic", "gemini"] = "gemini"
+    llm_model: str = "gemini-3-flash-preview"
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     anthropic_api_key: str = ""

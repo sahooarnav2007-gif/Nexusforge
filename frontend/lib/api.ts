@@ -21,6 +21,10 @@ const ACCESS_KEY = "nexusforge.access_token";
 const REFRESH_KEY = "nexusforge.refresh_token";
 
 export function apiBase(): string {
+  if (typeof window !== "undefined") {
+    // In browser, use same-origin relative URLs to avoid any CORS restrictions
+    return "";
+  }
   if (process.env.NEXT_PUBLIC_API_BASE) {
     return process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "");
   }
