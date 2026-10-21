@@ -219,6 +219,16 @@ class ProcessSandbox(Sandbox):
             env = {
                 "PATH": os.environ.get("PATH", "C:\\Windows\\System32;C:\\Windows"),
                 "HOME": os.environ.get("USERPROFILE", os.environ.get("TEMP", "C:\\")),
+                "SYSTEMROOT": os.environ.get("SYSTEMROOT", "C:\\Windows"),
+                "WINDIR": os.environ.get("WINDIR", "C:\\Windows"),
+                "SYSTEMDRIVE": os.environ.get("SYSTEMDRIVE", "C:"),
+                "TEMP": os.environ.get("TEMP", "C:\\Windows\\Temp"),
+                "TMP": os.environ.get("TMP", "C:\\Windows\\Temp"),
+                "USERPROFILE": os.environ.get("USERPROFILE", "C:\\Users\\HP"),
+                "APPDATA": os.environ.get("APPDATA", ""),
+                "LOCALAPPDATA": os.environ.get("LOCALAPPDATA", ""),
+                "COMSPEC": os.environ.get("COMSPEC", "C:\\Windows\\system32\\cmd.exe"),
+                "PATHEXT": os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH"),
                 "PYTHONDONTWRITEBYTECODE": "1",
                 "PYTHONUNBUFFERED": "1",
             }
@@ -261,6 +271,12 @@ class ProcessSandbox(Sandbox):
             full_argv = ["unshare", "-n", "--", *argv]
         else:
             full_argv = list(argv)
+
+        if sys.platform == "win32" and full_argv:
+            if full_argv[0] in ("python", "python3"):
+                full_argv[0] = sys.executable
+            elif full_argv[0] == "pytest":
+                full_argv = [sys.executable, "-m", "pytest", *full_argv[1:]]
 
         t0 = time.monotonic()
         timed_out = False
