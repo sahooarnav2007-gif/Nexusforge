@@ -66,6 +66,7 @@ class GeminiProvider(LLMProvider):
         prompt_tokens = sum(estimate_tokens(m.content) for m in messages)
         import time
 
+        t0 = time.monotonic()
         models_to_try = [self.model]
         for fallback in ("gemini-3.5-flash", "gemini-3.6-flash", "gemini-3-flash-preview"):
             if fallback not in models_to_try:
