@@ -24,7 +24,7 @@ export function apiBase(): string {
   if (process.env.NEXT_PUBLIC_API_BASE) {
     return process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "");
   }
-  return "https://product-element-quilt-plug.trycloudflare.com";
+  return "https://nexusforge-ji53.onrender.com";
 }
 
 export class ApiError extends Error {

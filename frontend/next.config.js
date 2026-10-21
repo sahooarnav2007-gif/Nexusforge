@@ -2,7 +2,7 @@
 const backendUrl =
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_API_BASE ||
-  'https://product-element-quilt-plug.trycloudflare.com';
+  'https://nexusforge-ji53.onrender.com';
 
 const nextConfig = {
   reactStrictMode: true,
