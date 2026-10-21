@@ -24,7 +24,7 @@ export function apiBase(): string {
   if (process.env.NEXT_PUBLIC_API_BASE) {
     return process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "");
   }
-  return "https://html-safely-clothing-facility.trycloudflare.com";
+  return "https://product-element-quilt-plug.trycloudflare.com";
 }
 
 export class ApiError extends Error {
