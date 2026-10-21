@@ -263,6 +263,7 @@ class RepoAnalyst:
     async def run(self, ctx: AgentContext) -> dict:
         step = await ctx.begin_step(self.name, self.state, {})
         try:
+            await ctx.set_state(self.state)
             from sqlalchemy import select
 
             from core.models import IndexedFile

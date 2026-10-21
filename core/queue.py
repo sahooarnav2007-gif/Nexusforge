@@ -31,23 +31,29 @@ class JobQueue:
 
 class InProcessQueue(JobQueue):
     def __init__(self) -> None:
-        self._queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._queue: asyncio.Queue[dict[str, Any]] | None = None
         self._wakeup: dict[str, asyncio.Event] = {}
 
+    def _get_q(self) -> asyncio.Queue[dict[str, Any]]:
+        if self._queue is None:
+            self._queue = asyncio.Queue()
+        return self._queue
+
     async def start(self) -> None:
-        pass
+        self._get_q()
 
     async def stop(self) -> None:
         pass
 
     async def enqueue(self, job: dict[str, Any]) -> None:
-        await self._queue.put(job)
-        log.debug("job enqueued (in-process)", extra={"run_id": job.get("run_id")})
+        await self._get_q().put(job)
+        log.info("job enqueued (in-process)", extra={"run_id": job.get("run_id")})
 
     async def consume(self, worker_id: str, timeout: float = 5.0) -> AsyncIterator[dict[str, Any]]:
+        q = self._get_q()
         while True:
             try:
-                job = await asyncio.wait_for(self._queue.get(), timeout=timeout)
+                job = await asyncio.wait_for(q.get(), timeout=timeout)
                 yield job
             except asyncio.TimeoutError:
                 return

@@ -47,12 +47,14 @@ class AgentWorker:
         log.info("agent worker stopped")
 
     async def _consume(self, queue: JobQueue) -> None:
+        log.info("agent worker consumer loop started")
         while not self._stop.is_set():
             try:
-                async for job in queue.consume(worker_id="api", timeout=2.0):
+                async for job in queue.consume(worker_id="api", timeout=1.0):
                     run_id = job.get("run_id")
                     if not run_id:
                         continue
+                    log.info("agent worker picked up job", extra={"run_id": run_id})
                     # enforce concurrency
                     while len(self._tasks) >= self.concurrency:
                         done, _ = await asyncio.wait(
