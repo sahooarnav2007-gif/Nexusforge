@@ -144,29 +144,25 @@ async def execute_run(run_id: str) -> None:
                           f"Internal error: {type(e).__name__}: {e}")
         finally:
             try:
-                await db.commit()
-            except Exception:
-                # session may be in a rolled-back state after an exception;
-                # persist what we can in a fresh transaction
-                try:
-                    await db.rollback()
-                    run.state = TaskState.FAILED.value
-                    run.error = run.error or "run aborted by internal error"
-                    await db.commit()
-                except Exception:
-                    log.exception("could not persist final run state", extra={"run_id": run_id})
-            try:
                 await sandbox.close()
             except Exception:
                 pass
-            if started and run.state not in {s.value for s in TERMINAL_STATES}:
-                # safety net: anything still non-terminal is failed
-                run.state = TaskState.FAILED.value
-                run.error = run.error or "run did not reach a terminal state"
-                try:
-                    await db.commit()
-                except Exception:
-                    pass
+            try:
+                await db.commit()
+            except Exception:
+                pass
+            # safety net: ensure run is marked failed if still non-terminal
+            try:
+                from sqlalchemy import update
+                terminal_vals = [s.value for s in TERMINAL_STATES]
+                await db.execute(
+                    update(TaskRun)
+                    .where(TaskRun.id == run_id, TaskRun.state.not_in(terminal_vals))
+                    .values(state=TaskState.FAILED.value, error="run did not reach a terminal state")
+                )
+                await db.commit()
+            except Exception:
+                pass
 
 
 async def _restore_context(ctx: AgentContext) -> None:
@@ -206,6 +202,7 @@ async def _run_pipeline(ctx: AgentContext) -> None:
     # --- ANALYZING -----------------------------------------------------------
     if _not_done(run, "repo_analyst"):
         await RepoAnalyst().run(ctx)
+        await ctx.commit()
     await _restore_context(ctx)
     if _not_done(run, "requirement_analyzer"):
         await RequirementAnalyzer().run(ctx)

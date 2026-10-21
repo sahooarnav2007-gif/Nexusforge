@@ -126,6 +126,14 @@ def _parse_json_response(content: str) -> dict:
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
 
+    # 0. Pre-clean raw unescaped triple-quotes in "content": """...""" or '''...'''
+    def _escape_multiline_docstrings(m):
+        raw = m.group(1).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+        return f'"content": "{raw}"'
+
+    text = re.sub(r'"content"\s*:\s*"""(.*?)"""', _escape_multiline_docstrings, text, flags=re.DOTALL)
+    text = re.sub(r'"content"\s*:\s*\'\'\'(.*?)\'\'\'', _escape_multiline_docstrings, text, flags=re.DOTALL)
+
     # 1. Direct json.loads with strict=False (allows unescaped newlines/tabs in code)
     try:
         data = json.loads(text, strict=False)
@@ -190,8 +198,36 @@ def _parse_json_response(content: str) -> dict:
                     ops.append(op_data)
             except Exception:
                 pass
+        if not ops:
+            path_matches = list(re.finditer(r'"path"\s*:\s*"([^"]+)"', text))
+            for pm in path_matches:
+                p = pm.group(1)
+                start_search = pm.end()
+                content_m = re.search(r'"content"\s*:\s*"(.*?)(?:"\s*,\s*"|"\s*\}\s*,\s*\{|"\s*\}\s*\]|$)', text[start_search:], re.DOTALL)
+                if content_m:
+                    ops.append({"operation": "modify", "path": p, "content": content_m.group(1).replace('\\n', '\n').replace('\\"', '"')})
         if ops:
             return {"operations": ops, "summary": f"extracted {len(ops)} operations"}
+
+    if '"steps"' in text or '"plan"' in text:
+        steps = []
+        step_blocks = re.findall(r'\{\s*"id"\s*:\s*"[^"]+".*?\}', text, re.DOTALL)
+        for sb in step_blocks:
+            try:
+                s_data = json.loads(sb, strict=False)
+                if isinstance(s_data, dict) and "id" in s_data:
+                    steps.append(s_data)
+            except Exception:
+                pass
+        if not steps:
+            step_ids = list(re.finditer(r'"id"\s*:\s*"([^"]+)"', text))
+            for sm in step_ids:
+                sid = sm.group(1)
+                desc_m = re.search(r'"description"\s*:\s*"([^"]+)"', text[sm.end():])
+                desc = desc_m.group(1) if desc_m else sid
+                steps.append({"id": sid, "description": desc, "files": [], "acceptance": ""})
+        if steps:
+            return {"steps": steps}
 
     raise LLMError(f"LLM returned malformed JSON: head={content[:200]!r}")
 
@@ -418,7 +454,9 @@ class Implementer:
                     "You are the implementation agent. Produce file operations "
                     "(create/modify/delete) that implement the plan. For modify, "
                     "return the COMPLETE new file content. Preserve unrelated code. "
-                    "Respond with JSON only: {\"operations\": [...], \"summary\": str}."
+                    "Respond with JSON only in format: "
+                    '{"operations": [{"operation": "modify", "path": "...", "content": "..."}], "summary": "..."}. '
+                    "The 'content' field must be a valid standard JSON string literal with newlines written as \\n and quotes escaped as \\\"."
                 ),
                 user=f"Plan: {json.dumps(plan, default=str)[:3000]}",
                 context={"spec": spec, "plan": plan, "files": files},
@@ -480,8 +518,9 @@ class TestGenerator:
                     "You are the test generator. Inspect the existing test "
                     "conventions in the context and produce file operations that add "
                     "tests for the implemented behavior (unit + API tests). For "
-                    "modify, return COMPLETE new file content. Respond with JSON only: "
-                    "{\"operations\": [...], \"summary\": str}."
+                    "modify, return COMPLETE new file content. Respond with JSON only in format: "
+                    '{"operations": [{"operation": "modify", "path": "...", "content": "..."}], "summary": "..."}. '
+                    "The 'content' field must be a valid standard JSON string literal with newlines written as \\n and quotes escaped as \\\"."
                 ),
                 user=f"Spec: {json.dumps(spec, default=str)[:2000]}",
                 context={"spec": spec, "plan": plan, "files": files,
@@ -614,16 +653,22 @@ class FailureAnalyzer:
             await ctx.set_state(self.state)
             last = ctx.get_data("last_test", {})
             parsed = last.get("parsed")
+            stdout = last.get("stdout", "")
             stderr = last.get("stderr", "")
-            # context: files likely involved (from failing frames)
+            combined = f"{stdout}\n{stderr}"
+            # context: files likely involved (from failing frames or tracebacks)
             paths = set()
             for ft in (parsed.failed_tests if parsed else []):
-                m = re.match(r"([\w./\-]+\.py)", ft)
+                clean_ft = ft.replace("ERROR ", "").strip()
+                m = re.search(r"([\w./\\-]+\.py)", clean_ft)
                 if m:
-                    paths.add(m.group(1))
-            m2 = re.search(r"((?:app|src|services?)[\w./\-]*\.py)", stderr)
-            if m2:
-                paths.add(m2.group(1))
+                    paths.add(m.group(1).replace("\\", "/"))
+            for m2 in re.finditer(r"((?:app|src|services|tests?)[\w./\\-]*\.py)", combined):
+                paths.add(m2.group(1).replace("\\", "/"))
+            for t in ctx.get_data("spec", {}).get("targets", []):
+                t_path = _normalize_target(t).get("path")
+                if t_path:
+                    paths.add(t_path)
             files = await ctx.file_contents(sorted(paths))
             if not files:
                 target_paths = [
@@ -641,8 +686,9 @@ class FailureAnalyzer:
                 user=f"Test run failed at iteration {ctx.run.iteration}.",
                 context={"test_output": {
                     "exit_code": last.get("exit_code"),
-                    "stdout": last.get("stdout", "")[-8000:],
+                    "stdout": stdout[-8000:],
                     "stderr": stderr[-8000:],
+                    "output": combined[-8000:],
                     "failed_tests": (parsed.failed_tests if parsed else [])[:20],
                 }, "files": files},
             )
@@ -673,7 +719,9 @@ class RepairAgent:
         try:
             diagnosis = ctx.get_data("diagnosis", {})
             last = ctx.get_data("last_test", {})
+            stdout = last.get("stdout", "")
             stderr = last.get("stderr", "")
+            combined = f"{stdout}\n{stderr}"
             # context: the failing file + its dependencies
             paths = set()
             frame = diagnosis.get("failing_frame") or {}
@@ -684,6 +732,8 @@ class RepairAgent:
                 resolved_frame = ctx.resolve_workspace_path(frame["file"])
                 if resolved_frame:
                     paths.add(resolved_frame)
+            for m2 in re.finditer(r"((?:app|src|services|tests?)[\w./\\-]*\.py)", combined):
+                paths.add(m2.group(1).replace("\\", "/"))
             for t in ctx.get_data("spec", {}).get("targets", []):
                 t_path = _normalize_target(t).get("path")
                 if t_path:
@@ -697,14 +747,17 @@ class RepairAgent:
             resp = await ctx.llm_complete(
                 role="repair_agent",
                 system=(
-                    "You are the repair agent. Given the diagnosis and the current "
-                    "file contents, produce the minimal file operations that fix the "
-                    "failure. For modify, return COMPLETE new file content. Respond "
-                    "with JSON only: {\"operations\": [...], \"summary\": str}."
+                    "You are the repair agent. Given the diagnosis, test output, and the current "
+                    "file contents, produce the minimal file operations that fix the failure. "
+                    "For modify, return COMPLETE new file content. Respond with JSON only in format: "
+                    '{"operations": [{"operation": "modify", "path": "...", "content": "..."}], "summary": "..."}. '
+                    "The 'content' field must be a valid standard JSON string literal with newlines written as \\n and quotes escaped as \\\"."
                 ),
                 user=f"Repair iteration {ctx.run.iteration}.",
                 context={"diagnosis": diagnosis,
-                         "test_output": {"stderr": stderr[-6000:],
+                         "test_output": {"stdout": stdout[-6000:],
+                                         "stderr": stderr[-6000:],
+                                         "output": combined[-8000:],
                                          "failed_tests":
                                          (last.get("parsed").failed_tests
                                           if last.get("parsed") else [])[:10]},

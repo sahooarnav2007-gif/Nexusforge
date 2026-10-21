@@ -1,6 +1,8 @@
 """Google Gemini (generativelanguage REST) provider."""
 from __future__ import annotations
 
+import asyncio
+import time
 import httpx
 
 from core.config import get_settings
@@ -23,7 +25,7 @@ class GeminiProvider(LLMProvider):
         s = get_settings()
         self.api_key = api_key or s.gemini_api_key
         self.base_url = (base_url or s.gemini_base_url).rstrip("/")
-        self.model = model or s.llm_model or "gemini-1.5-flash"
+        self.model = model or s.llm_model or "gemini-2.5-flash"
         self._client: httpx.AsyncClient | None = None
 
     async def _http(self) -> httpx.AsyncClient:
@@ -64,11 +66,18 @@ class GeminiProvider(LLMProvider):
                 ]
             }]
         prompt_tokens = sum(estimate_tokens(m.content) for m in messages)
-        import time
 
         t0 = time.monotonic()
         models_to_try = [self.model]
-        for fallback in ("gemini-3.5-flash", "gemini-3.6-flash", "gemini-3-flash-preview"):
+        for fallback in (
+            "gemini-3-flash-preview",
+            "gemini-flash-lite-latest",
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
+            "gemini-flash-latest",
+        ):
             if fallback not in models_to_try:
                 models_to_try.append(fallback)
 
@@ -83,15 +92,16 @@ class GeminiProvider(LLMProvider):
                         used_model = candidate_model
                         break
                     elif resp.status_code in (429, 503):
-                        await asyncio.sleep(2.0)
+                        await asyncio.sleep(1.0)
                         continue
                     else:
-                        break
+                        continue
                 except httpx.HTTPError:
-                    await asyncio.sleep(1.5)
+                    await asyncio.sleep(1.0)
                     continue
             if resp is not None and resp.status_code == 200:
                 break
+            await asyncio.sleep(2.0)
 
         latency = int((time.monotonic() - t0) * 1000)
         if resp is None or resp.status_code != 200:
@@ -113,7 +123,7 @@ class GeminiProvider(LLMProvider):
             return LLMResponse(
                 content=text,
                 tool_calls=calls,
-                model=data.get("modelVersion", self.model),
+                model=data.get("modelVersion") or used_model,
                 provider=self.name,
                 prompt_tokens=usage.get("promptTokenCount", prompt_tokens),
                 completion_tokens=usage.get("candidatesTokenCount",

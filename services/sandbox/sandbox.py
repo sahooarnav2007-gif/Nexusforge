@@ -243,7 +243,10 @@ class ProcessSandbox(Sandbox):
         # inherit the host PYTHONPATH, and make sure the host interpreter's
         # site-packages are visible so sandboxed `python -m pytest` etc.
         # resolve the same packages as the host
-        parts = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+        parts = ["."]
+        for p in os.environ.get("PYTHONPATH", "").split(os.pathsep):
+            if p and p not in parts:
+                parts.append(p)
         try:
             import site
             for sp in site.getsitepackages():

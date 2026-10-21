@@ -33,8 +33,18 @@ def get_engine() -> AsyncEngine:
                           pool_pre_ping=True)
         else:
             # aiosqlite: allow cross-connection access for the in-process worker
-            kwargs["connect_args"] = {"check_same_thread": False}
+            kwargs["connect_args"] = {"check_same_thread": False, "timeout": 60.0}
         _engine = create_async_engine(s.database_url, **kwargs)
+        if s.is_sqlite:
+            from sqlalchemy import event
+
+            @event.listens_for(_engine.sync_engine, "connect")
+            def _set_sqlite_pragma(dbapi_connection, connection_record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.execute("PRAGMA busy_timeout=60000")
+                cursor.close()
         _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
     return _engine
 

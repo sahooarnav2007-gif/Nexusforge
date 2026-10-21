@@ -28,11 +28,11 @@ def parse_pytest_output(stdout: str, stderr: str, exit_code: int | None) -> Pars
         return out
 
     # failed test lines: "FAILED tests/test_x.py::test_y - KeyError: 'email'"
-    for m in re.finditer(r"^FAILED\s+([\w./\-]+::[\w\[\]\'\-]+)", text, re.MULTILINE):
-        out.failed_tests.append(m.group(1))
+    for m in re.finditer(r"^FAILED\s+([\w./\\-]+::[\w\[\]\'\-]+)", text, re.MULTILINE):
+        out.failed_tests.append(m.group(1).replace("\\", "/"))
     # errors during collection
-    for m in re.finditer(r"^ERROR\s+([\w./\-]+)", text, re.MULTILINE):
-        out.failed_tests.append(f"ERROR {m.group(1)}")
+    for m in re.finditer(r"^ERROR\s+([\w./\\-]+)", text, re.MULTILINE):
+        out.failed_tests.append(m.group(1).replace("\\", "/"))
 
     # summary line: "===== 3 passed, 1 failed, 2 errors in 0.12s ====="
     m = re.search(
