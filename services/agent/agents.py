@@ -37,19 +37,39 @@ async def _apply_operations(ctx: AgentContext, operations: list[dict]) -> list[d
     """Apply file operations through the tool layer; record every change."""
     applied = []
     for op in operations:
-        kind = op.get("op")
-        path = op.get("path", "")
-        reasoning = op.get("reasoning", "")
+        if not isinstance(op, dict):
+            continue
+        kind = op.get("op") or op.get("action") or op.get("operation") or "modify"
+        kind = str(kind).lower().strip()
+        if kind in ("update", "edit"):
+            kind = "modify"
+        elif kind in ("add", "new"):
+            kind = "create"
+        elif kind in ("remove",):
+            kind = "delete"
+
+        raw_path = op.get("path") or op.get("file") or op.get("target_file") or op.get("filename") or ""
+        path = str(raw_path).replace("\\", "/").lstrip("/")
+        if not path:
+            continue
+        content = op.get("content") or op.get("new_content") or op.get("code") or ""
+        reasoning = op.get("reasoning") or op.get("description") or op.get("summary") or ""
         fp = ctx.workspace / path
         before = fp.read_text(encoding="utf-8") if fp.exists() else None
         if kind == "create":
             tctx = ctx.tool_ctx("implementer", WRITE_TOOLS)
             res = await ctx.tools.call(tctx, "create_file",
-                                       {"path": path, "content": op["content"]})
+                                       {"path": path, "content": content})
         elif kind == "modify":
-            tctx = ctx.tool_ctx("implementer", WRITE_TOOLS)
-            res = await ctx.tools.call(tctx, "modify_file",
-                                       {"path": path, "content": op["content"]})
+            if not fp.exists():
+                tctx = ctx.tool_ctx("implementer", WRITE_TOOLS)
+                res = await ctx.tools.call(tctx, "create_file",
+                                           {"path": path, "content": content})
+                kind = "create"
+            else:
+                tctx = ctx.tool_ctx("implementer", WRITE_TOOLS)
+                res = await ctx.tools.call(tctx, "modify_file",
+                                           {"path": path, "content": content})
         elif kind == "delete":
             tctx = ctx.tool_ctx("implementer", WRITE_TOOLS)
             res = await ctx.tools.call(tctx, "delete_file", {"path": path})
@@ -262,7 +282,8 @@ class Planner:
                     "You are the implementation planner. Given a requirement spec and "
                     "repository context, produce an ordered plan: each step has an id, "
                     "description, target files, and acceptance criterion. End with a "
-                    "test-generation step. Respond with JSON only."
+                    "test-generation step. Respond with JSON only in format: "
+                    "{\"steps\": [{\"id\": \"step-1\", \"description\": \"...\", \"files\": [\"...\"], \"acceptance\": \"...\"}]}."
                 ),
                 user=f"Spec: {json.dumps(spec, default=str)[:3000]}",
                 context={"spec": spec,
@@ -270,8 +291,25 @@ class Planner:
                          "files": files},
             )
             plan = _parse_json_response(resp.content)
+            if isinstance(plan, list):
+                plan = {"steps": plan}
+            if "steps" not in plan or not plan["steps"]:
+                steps = plan.get("plan") or plan.get("ordered_plan") or plan.get("tasks") or []
+                if isinstance(steps, list) and steps:
+                    plan["steps"] = steps
+                else:
+                    for val in plan.values():
+                        if isinstance(val, list) and val and isinstance(val[0], dict):
+                            plan["steps"] = val
+                            break
             if "steps" not in plan or not plan["steps"]:
                 raise LLMError("planner produced no steps")
+            for st in plan["steps"]:
+                if isinstance(st, dict):
+                    if "files" not in st:
+                        st["files"] = st.get("target_files") or []
+                    if "acceptance" not in st:
+                        st["acceptance"] = st.get("acceptance_criterion") or ""
             await ctx.finish_step(step, status="completed", output=plan,
                                   summary=f"plan with {len(plan['steps'])} steps",
                                   tokens=resp.prompt_tokens + resp.completion_tokens)
@@ -334,7 +372,15 @@ class Implementer:
                 context={"spec": spec, "plan": plan, "files": files},
             )
             result = _parse_json_response(resp.content)
-            ops = result.get("operations", [])
+            if isinstance(result, list):
+                ops = result
+            else:
+                ops = result.get("operations") or result.get("changes") or result.get("files") or []
+                if not ops:
+                    for val in result.values():
+                        if isinstance(val, list) and val and isinstance(val[0], dict):
+                            ops = val
+                            break
             if not ops:
                 raise LLMError("implementer produced no operations")
             applied = await _apply_operations(ctx, ops)
@@ -390,7 +436,15 @@ class TestGenerator:
                          "test_files": test_files},
             )
             result = _parse_json_response(resp.content)
-            ops = result.get("operations", [])
+            if isinstance(result, list):
+                ops = result
+            else:
+                ops = result.get("operations") or result.get("changes") or result.get("files") or []
+                if not ops:
+                    for val in result.values():
+                        if isinstance(val, list) and val and isinstance(val[0], dict):
+                            ops = val
+                            break
             applied = await _apply_operations(ctx, ops) if ops else []
             await ctx.finish_step(step, status="completed",
                                   output={"applied": applied},
@@ -605,7 +659,15 @@ class RepairAgent:
                          "files": files},
             )
             result = _parse_json_response(resp.content)
-            ops = result.get("operations", [])
+            if isinstance(result, list):
+                ops = result
+            else:
+                ops = result.get("operations") or result.get("changes") or result.get("files") or []
+                if not ops:
+                    for val in result.values():
+                        if isinstance(val, list) and val and isinstance(val[0], dict):
+                            ops = val
+                            break
             if not ops:
                 raise LLMError("repair agent produced no operations")
             applied = await _apply_operations(ctx, ops)
@@ -715,7 +777,16 @@ class CodeReviewer:
                 ], "files": files},
             )
             result = _parse_json_response(resp.content)
-            findings = result.get("findings", [])
+            if isinstance(result, list):
+                findings = result
+                result = {"findings": findings, "verdict": "ok", "summary": f"{len(findings)} findings"}
+            else:
+                findings = result.get("findings") or result.get("issues") or []
+                if not findings:
+                    for val in result.values():
+                        if isinstance(val, list) and val and isinstance(val[0], dict):
+                            findings = val
+                            break
             from core.models import ReviewFinding
 
             for f in findings:
