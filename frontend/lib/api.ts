@@ -106,7 +106,10 @@ async function refreshTokens(): Promise<TokenPair | null> {
   try {
     const res = await fetch(`${apiBase()}/api/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Bypass-Tunnel-Reminder": "true",
+      },
       body: JSON.stringify({ refresh_token: refresh }),
     });
     if (!res.ok) return null;
@@ -123,6 +126,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     fetch(`${apiBase()}${path}`, {
       method: opts.method ?? "GET",
       headers: {
+        "Bypass-Tunnel-Reminder": "true",
         ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },

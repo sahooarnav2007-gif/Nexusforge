@@ -62,15 +62,16 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json" if s.is_production else "/openapi.json",
     )
 
-    # --- CORS (locked to the web origin) ---
+    # --- CORS (locked to the web origin or allow all with credentials) ---
     origins = [o.strip() for o in s.web_origin.split(",") if o.strip()]
-    allow_all = origins == ["*"]
+    allow_all = "*" in origins or s.web_origin.strip() == "*"
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if allow_all else origins,
-        allow_credentials=not allow_all,
+        allow_origins=origins if not allow_all else [],
+        allow_origin_regex=r"^https?://.*" if allow_all else None,
+        allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-Id"],
+        allow_headers=["*"],
         expose_headers=["X-Request-Id"],
     )
 
