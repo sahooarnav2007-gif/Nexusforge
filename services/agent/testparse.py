@@ -76,4 +76,9 @@ def parse_pytest_output(stdout: str, stderr: str, exit_code: int | None) -> Pars
         pm = re.search(r"(\d+)\s+passed", text)
         if pm:
             out.passed = int(pm.group(1))
+
+    # if exit code is 0 and there are zero failures or errors, treat as a successful check
+    if exit_code == 0 and out.failed == 0 and out.errors == 0:
+        out.passed = max(out.passed, 1)
+
     return out

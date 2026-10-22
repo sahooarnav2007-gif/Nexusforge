@@ -573,8 +573,9 @@ class ExecutionAgent:
             # becomes -qq, which suppresses pytest's final summary line and
             # breaks result parsing)
             argv = command.split()
-            if not any(a in ("-q", "--quiet", "-v", "--verbose", "-ra") for a in argv):
-                argv.append("-q")
+            if any("pytest" in a for a in argv):
+                if not any(a in ("-q", "--quiet", "-v", "--verbose", "-ra") for a in argv):
+                    argv.append("-q")
 
             await ctx.emit_terminal(f"$ {' '.join(argv)}")
             tctx = ctx.tool_ctx(self.name, self.permissions)

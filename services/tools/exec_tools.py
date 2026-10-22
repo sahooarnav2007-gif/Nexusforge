@@ -80,9 +80,10 @@ class RunTestsTool(_ExecTool):
         else:
             extra = (args.get("args") or "").split()
             argv = ["python", "-m", "pytest", *extra]
-        # ensure a verbosity flag (single -q keeps pytest's summary line)
-        if not any(a in ("-q", "--quiet", "-v", "--verbose", "-ra") for a in argv):
-            argv.append("-q")
+        # ensure a verbosity flag only for pytest commands
+        if any("pytest" in a for a in argv):
+            if not any(a in ("-q", "--quiet", "-v", "--verbose", "-ra") for a in argv):
+                argv.append("-q")
         return argv
 
 
