@@ -490,6 +490,13 @@ export default function TaskDetailPage() {
       <ErrorNote message={actionError} onDismiss={() => setActionError("")} />
       <ErrorNote message={streamError} onDismiss={() => setStreamError("")} />
 
+      {detail?.latest_run?.error && (runState === "FAILED" || runState === "CANCELLED" || task.status === "failed") && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold text-red-900">Run Failed:</p>
+          <p className="mt-1">{detail.latest_run.error}</p>
+        </div>
+      )}
+
       {/* stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="State">
@@ -511,7 +518,7 @@ export default function TaskDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* left column: terminal + results */}
         <div className="space-y-6 lg:col-span-2">
-          <TerminalPane lines={termLines} streaming={streaming} active={active} />
+          <TerminalPane lines={termLines} streaming={streaming} active={active} error={detail?.latest_run?.error} />
 
           {/* live progress chips while running */}
           {active && (liveTests.length > 0 || liveSecurity || liveReview) && (
@@ -624,10 +631,12 @@ function TerminalPane({
   lines,
   streaming,
   active,
+  error,
 }: {
   lines: TermLine[];
   streaming: boolean;
   active: boolean;
+  error?: string | null;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
@@ -666,8 +675,12 @@ function TerminalPane({
         aria-label="Live terminal output"
       >
         {lines.length === 0 ? (
-          <span className="text-term-dim">
-            {active ? "Waiting for output…" : "No output yet. Start a run to see live output."}
+          <span className={error ? "text-red-400" : "text-term-dim"}>
+            {error
+              ? `[Error] ${error}`
+              : active
+              ? "Waiting for output…"
+              : "No output yet. Start a run to see live output."}
           </span>
         ) : (
           lines.map((l, i) => (

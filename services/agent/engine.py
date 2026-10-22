@@ -77,10 +77,21 @@ async def execute_run(run_id: str) -> None:
             return
         repo = await db.get(Repository, task.repository_id) if task.repository_id else None
         if repo is None:
-            await _fail(db, run, "Task has no repository")
-            return
+            # Auto-attach latest repository from project if task was created without selecting one
+            project_repos = (
+                await db.execute(
+                    select(Repository).where(Repository.project_id == project.id).order_by(Repository.created_at.desc())
+                )
+            ).scalars().all()
+            if project_repos:
+                repo = project_repos[0]
+                task.repository_id = repo.id
+                await db.commit()
+            else:
+                await _fail(db, run, "Task has no repository. Please import a repository (e.g. GitHub URL or demo) in this project first so the agent has code to work on.")
+                return
         if not Path(repo.workspace_path).is_dir():
-            await _fail(db, run, "Repository workspace missing; re-import the repository")
+            await _fail(db, run, f"Repository workspace directory missing ({repo.workspace_path}). Please re-import the repository.")
             return
 
         task_id_var.set(task.id)
