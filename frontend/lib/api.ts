@@ -148,7 +148,15 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     }
   }
 
-  if (!res.ok) throw await parseError(res);
+  if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined") {
+      clearTokens();
+      if (!window.location.pathname.startsWith("/login") && !window.location.pathname.startsWith("/register")) {
+        window.location.href = "/login";
+      }
+    }
+    throw await parseError(res);
+  }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
