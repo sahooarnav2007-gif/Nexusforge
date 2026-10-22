@@ -518,7 +518,7 @@ export default function TaskDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* left column: terminal + results */}
         <div className="space-y-6 lg:col-span-2">
-          <TerminalPane lines={termLines} streaming={streaming} active={active} error={detail?.latest_run?.error} />
+          <TerminalPane lines={termLines} streaming={streaming} active={active} error={!active ? detail?.latest_run?.error : null} />
 
           {/* live progress chips while running */}
           {active && (liveTests.length > 0 || liveSecurity || liveReview) && (
@@ -675,11 +675,11 @@ function TerminalPane({
         aria-label="Live terminal output"
       >
         {lines.length === 0 ? (
-          <span className={error ? "text-red-400" : "text-term-dim"}>
-            {error
+          <span className={!active && error ? "text-red-400" : "text-term-dim"}>
+            {active
+              ? "Agent is running... waiting for live output..."
+              : error
               ? `[Error] ${error}`
-              : active
-              ? "Waiting for output…"
               : "No output yet. Start a run to see live output."}
           </span>
         ) : (
