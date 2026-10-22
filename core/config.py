@@ -130,6 +130,10 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def _validate_db_url(cls, v: str) -> str:
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
         if v.startswith("sqlite"):
             # Ensure the parent dir exists for file-backed SQLite. Parse the
             # URL with SQLAlchemy (the same parser the driver uses) so that
