@@ -195,7 +195,7 @@ export const projectsApi = {
     request<RepositoryOut[]>(`/api/projects/${projectId}/repositories`),
   importRepository: (
     projectId: string,
-    body: { name: string; source_kind: "local" | "upload"; source_ref: string; index: boolean }
+    body: { name: string; source_kind: "local" | "upload" | "git" | "github"; source_ref: string; index: boolean }
   ) =>
     request<RepositoryOut>(`/api/projects/${projectId}/repositories`, {
       method: "POST",

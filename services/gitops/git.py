@@ -128,3 +128,19 @@ def ensure_repo(cwd: Path) -> None:
     st = status(cwd)
     if st["files"] and not log(cwd, 1):
         commit(cwd, "nexusforge: baseline import")
+def clone(url: str, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if shutil.which("git") is None:
+        raise ValidationError("git is not installed on this host")
+    try:
+        proc = subprocess.run(
+            ["git", "clone", "--depth", "1", url, str(dest)],
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT * 3,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise ValidationError(f"Git clone timed out for {url}") from e
+    if proc.returncode != 0:
+        raise ValidationError(f"Git clone failed: {proc.stderr.strip()[:300]}")

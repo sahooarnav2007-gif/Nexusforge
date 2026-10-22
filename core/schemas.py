@@ -72,7 +72,7 @@ class ProjectOut(BaseModel):
 
 class RepositoryImportRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    source_kind: str = Field(default="local", pattern=r"^(local|upload)$")
+    source_kind: str = Field(default="local", pattern=r"^(local|upload|git|github)$")
     source_ref: str = Field(default="", max_length=500)  # local path or origin URL
     index: bool = True
 

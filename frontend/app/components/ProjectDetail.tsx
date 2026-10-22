@@ -327,10 +327,12 @@ function ImportRepoForm({
     setError("");
     setBusy(true);
     try {
+      const trimmedRef = sourceRef.trim();
+      const isGit = trimmedRef.startsWith("http://") || trimmedRef.startsWith("https://") || trimmedRef.startsWith("git@");
       await projectsApi.importRepository(projectId, {
         name: name.trim(),
-        source_kind: "local",
-        source_ref: sourceRef.trim(),
+        source_kind: isGit ? "git" : "local",
+        source_ref: trimmedRef,
         index,
       });
       setName("");
@@ -386,17 +388,27 @@ function ImportRepoForm({
         </div>
         <div>
           <label className="label" htmlFor="r-ref">
-            Local path on server
+            Git Repository URL or Demo Path
           </label>
           <input
             id="r-ref"
             required
             maxLength={500}
             className="input font-mono text-xs"
-            placeholder="demo/repo"
+            placeholder="https://github.com/owner/repo or demo/repo"
             value={sourceRef}
-            onChange={(e) => setSourceRef(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSourceRef(val);
+              if (!name && val.includes("/")) {
+                const parts = val.replace(/\.git$/, "").split("/").filter(Boolean);
+                if (parts.length > 0) setName(parts[parts.length - 1]);
+              }
+            }}
           />
+          <p className="mt-1 text-[11px] text-ink-faint">
+            Enter a public Git URL or click &quot;Load Built-in Demo Repo&quot; above.
+          </p>
         </div>
       </div>
       <label className="flex items-center gap-2 text-sm text-ink-soft">

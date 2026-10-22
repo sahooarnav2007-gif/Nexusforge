@@ -38,10 +38,18 @@ async def import_repository(
     source_kind: str,
     source_ref: str,
 ) -> Repository:
-    if source_kind == "local":
-        if not source_ref:
+    ref_clean = source_ref.strip()
+    if source_kind in ("git", "github") or ref_clean.startswith(("http://", "https://", "git@")):
+        source_kind = "git"
+        target = workspace_for(project, name)
+        if target.exists():
+            shutil.rmtree(target)
+        git.clone(ref_clean, target)
+        src = target
+    elif source_kind == "local":
+        if not ref_clean:
             raise ValidationError("source_ref (local path) is required for kind 'local'")
-        src = Path(source_ref).expanduser()
+        src = Path(ref_clean).expanduser()
         if not src.exists():
             from core.config import ROOT_DIR
             if (ROOT_DIR / src).exists():
@@ -52,7 +60,12 @@ async def import_repository(
             src = src.resolve()
 
         if not src.exists():
-            raise ValidationError(f"Source path does not exist: {src}")
+            raise ValidationError(
+                f"Source path does not exist on server: {src}. "
+                "The server runs in the cloud and cannot access your local laptop drive. "
+                "Please provide a public Git clone URL (e.g. https://github.com/...) "
+                "or click 'Load Built-in Demo Repo' ('demo/repo')."
+            )
         if not src.is_dir():
             raise ValidationError(f"Source path is not a directory: {src}")
         target = workspace_for(project, name)
