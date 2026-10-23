@@ -76,7 +76,13 @@ class RunTestsTool(_ExecTool):
     def _argv(self, args: dict) -> list[str]:
         command = (args.get("command") or "").strip()
         if command:
-            argv = command.split()
+            import shlex, sys
+            if any(tok in command for tok in ("|", "&&", "||", ">", "<", ";")):
+                return ["cmd.exe", "/c", command] if sys.platform == "win32" else ["/bin/sh", "-c", command]
+            try:
+                argv = shlex.split(command, posix=(sys.platform != "win32"))
+            except Exception:
+                argv = command.split()
         else:
             extra = (args.get("args") or "").split()
             argv = ["python", "-m", "pytest", *extra]

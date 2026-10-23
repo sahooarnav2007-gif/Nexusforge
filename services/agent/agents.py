@@ -572,7 +572,14 @@ class ExecutionAgent:
             # command does not already specify a verbosity (a duplicated -q
             # becomes -qq, which suppresses pytest's final summary line and
             # breaks result parsing)
-            argv = command.split()
+            import shlex, sys
+            if any(tok in command for tok in ("|", "&&", "||", ">", "<", ";")):
+                argv = ["cmd.exe", "/c", command] if sys.platform == "win32" else ["/bin/sh", "-c", command]
+            else:
+                try:
+                    argv = shlex.split(command, posix=(sys.platform != "win32"))
+                except Exception:
+                    argv = command.split()
             if any("pytest" in a for a in argv):
                 if not any(a in ("-q", "--quiet", "-v", "--verbose", "-ra") for a in argv):
                     argv.append("-q")
