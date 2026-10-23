@@ -102,7 +102,7 @@ async def import_repository(
         project_id=project.id,
         name=name,
         source_kind=source_kind,
-        source_ref=str(src),
+        source_ref=ref_clean,
         workspace_path=str(target),
         default_branch=git.branch(target) or "main",
         head_commit=git.head_commit(target),
@@ -113,3 +113,32 @@ async def import_repository(
         "project": project.id, "repo": name, "path": str(target),
     })
     return repo
+
+def ensure_workspace_exists(repo: Repository, project: Project) -> Path:
+    target = Path(repo.workspace_path)
+    if target.is_dir() and any(target.iterdir()):
+        return target
+
+    target.mkdir(parents=True, exist_ok=True)
+    ref = (repo.source_ref or "").strip()
+    if repo.source_kind in ("git", "github") or ref.startswith(("http://", "https://", "git@")):
+        shutil.rmtree(target, ignore_errors=True)
+        git.clone(ref, target)
+        git.ensure_repo(target)
+    elif repo.source_kind == "local":
+        from core.config import ROOT_DIR
+        src = Path(ref)
+        if not src.exists():
+            src = ROOT_DIR / ref
+        if src.is_dir():
+            shutil.rmtree(target, ignore_errors=True)
+            shutil.copytree(
+                src, target,
+                ignore=shutil.ignore_patterns(
+                    ".git", "node_modules", "__pycache__", ".venv", "venv",
+                    ".next", "dist", "build", ".cache",
+                ),
+                symlinks=False,
+            )
+            git.ensure_repo(target)
+    return target

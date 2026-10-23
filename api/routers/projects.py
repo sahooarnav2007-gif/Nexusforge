@@ -178,7 +178,13 @@ async def import_repo(project_id: str, body: RepositoryImportRequest,
         )
     ).scalar_one_or_none()
     if existing is not None:
-        raise ConflictError(f"Repository '{body.name}' already exists in this project")
+        from pathlib import Path
+        if not Path(existing.workspace_path).is_dir():
+            # Workspace missing on disk (e.g. after container redeploy): replace stale record
+            await db.delete(existing)
+            await db.flush()
+        else:
+            raise ConflictError(f"Repository '{body.name}' already exists in this project")
 
     try:
         repo = await import_repository(

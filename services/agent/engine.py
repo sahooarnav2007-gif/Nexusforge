@@ -90,7 +90,14 @@ async def execute_run(run_id: str) -> None:
             else:
                 await _fail(db, run, "Task has no repository. Please import a repository (e.g. GitHub URL or demo) in this project first so the agent has code to work on.")
                 return
-        if not Path(repo.workspace_path).is_dir():
+        ws_path = Path(repo.workspace_path)
+        if not ws_path.is_dir() or not any(ws_path.iterdir()):
+            from services.indexing.ingest import ensure_workspace_exists
+            try:
+                ws_path = ensure_workspace_exists(repo, project)
+            except Exception as e:
+                log.warning("Failed to auto-restore workspace for %s: %s", repo.name, e)
+        if not ws_path.is_dir():
             await _fail(db, run, f"Repository workspace directory missing ({repo.workspace_path}). Please re-import the repository.")
             return
 
