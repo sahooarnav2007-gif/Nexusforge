@@ -584,7 +584,7 @@ class ExecutionAgent:
                 if not any(a in ("-q", "--quiet", "-v", "--verbose", "-ra") for a in argv):
                     argv.append("-q")
 
-            await ctx.emit_terminal(f"$ {' '.join(argv)}")
+            await ctx.emit_terminal(f"$ {command}")
             tctx = ctx.tool_ctx(self.name, self.permissions)
             res = await ctx.tools.call(tctx, "run_tests",
                                        {"command": command, "timeout": 180})
@@ -593,6 +593,10 @@ class ExecutionAgent:
             stderr = data.get("stderr", "")
             exit_code = data.get("exit_code")
             timed_out = data.get("timed_out", False)
+
+            if res.error and not (stdout or stderr):
+                stderr = res.error
+                await ctx.emit_terminal(f"[error] {res.error}", stream="err")
 
             # stream output to the terminal (tail to keep events bounded)
             for line in (stdout + "\n" + stderr).splitlines()[-200:]:

@@ -11,14 +11,19 @@ from services.tools.registry import Tool, ToolContext, ToolResult
 # allowlisted interpreters/tools the agent may invoke
 ALLOWED_PROGRAMS = {
     "python", "python3", "pytest", "pip", "ruff", "bandit", "semgrep",
-    "node", "npm", "git", "make",
+    "node", "npm", "pnpm", "yarn", "bun",
+    "git", "make", "cargo", "go", "mvn", "gradle",
+    "sh", "bash", "cmd", "powershell",
+    "grep", "tail", "head", "cat", "echo", "diff", "find", "sed", "awk", "test", "wc",
 }
 
 
 def _validate_argv(argv: list[str]) -> str | None:
     if not argv or not isinstance(argv, list) or not all(isinstance(a, str) for a in argv):
         return "argv must be a list of strings"
-    prog = argv[0].rsplit("/", 1)[-1]
+    prog = argv[0].rsplit("/", 1)[-1].lower()
+    if prog.endswith(".exe"):
+        prog = prog[:-4]
     if prog not in ALLOWED_PROGRAMS:
         return f"program '{prog}' is not in the allowlist {sorted(ALLOWED_PROGRAMS)}"
     return None
